@@ -107,8 +107,16 @@ if jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/
   :
 else
   say "Adding the palm tree to your bar"
-  omarchy-bar put "$WIDGET" --section right --index 0 >/dev/null 2>&1 ||
-    warn "Couldn't place the widget; add it with: omarchy bar put $WIDGET --section right --index 0"
+  omarchy-bar put "$WIDGET" --section right --index 0 >/dev/null 2>&1 || true
+  # Make sure it landed in shell.json (the shell hot-reloads it).
+  if ! jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/dev/null 2>&1; then
+    if [[ -f $SHELL_JSON ]] && jq --arg id "$WIDGET" '.bar.layout.right = [{id: $id}] + (.bar.layout.right // [])' \
+      "$SHELL_JSON" >"$tmp/shell.json" 2>/dev/null; then
+      cat "$tmp/shell.json" >"$SHELL_JSON"
+    else
+      warn "Couldn't place the widget; add it with: omarchy bar put $WIDGET --section right --index 0"
+    fi
+  fi
 fi
 
 # ---- Super+Space menu -------------------------------------------------------------------
