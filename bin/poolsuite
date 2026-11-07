@@ -13,6 +13,8 @@
 #   poolsuite status           JSON: running, pid, bus, channel
 #   poolsuite refresh [ch…]    rebuild the cached track lists (all by default)
 #   poolsuite theme [omarchy|poolsuite]  show or set the player's look
+#   poolsuite setup            add the player to your bar and Super+Space menu
+#   poolsuite unsetup          take it off again
 #   poolsuite update           update to the latest version
 #   poolsuite uninstall        remove Poolsuite
 #
@@ -27,7 +29,25 @@ STATE="${XDG_STATE_HOME:-$HOME/.local/state}/poolsuite"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/poolsuite"
 SOCK="${XDG_RUNTIME_DIR:-/tmp}/poolsuite-mpv.sock"
 WIDGET="lucasclgibson.poolsuite"
-GUARD="${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite/guard.lua"
+
+# Where the rest of the code lives: next to this script in a git checkout
+# (bin/ -> plugin/, share/), or /usr/share/omarchy-poolsuite when installed
+# as a package (/usr/bin/poolsuite).
+SELF=$(readlink -f "$0")
+CODE=$(dirname "$(dirname "$SELF")")
+if [[ $SELF == /usr/bin/* ]]; then
+  PACKAGED=1
+  CODE=/usr/share/omarchy-poolsuite
+else
+  PACKAGED=0
+fi
+GUARD="$CODE/share/guard.lua"
+PLUGIN_SRC="$CODE/plugin"
+PLUGIN_LINK="$HOME/.config/omarchy/plugins/poolsuite"
+SHELL_JSON="$HOME/.config/omarchy/shell.json"
+MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
+MENU_ENTRY='  "poolsuite": {"icon":"󱁕","label":"Poolsuite","description":"Ultra-summer internet radio in the bar","action":"poolsuite","aliases":["radio","music"]},'
+
 mkdir -p "$STATE" "$CACHE"
 
 declare -A URLS=(
@@ -157,6 +177,68 @@ quit() {
   rm -f "$STATE/pid"
 }
 
+# Per-user setup: link the bar plugin, put it on the bar, add the menu entry.
+# Touches only ~/.config/omarchy. Safe to run again.
+setup() {
+  [[ -d $PLUGIN_SRC ]] || { echo "Can't find the plugin at $PLUGIN_SRC" >&2; exit 1; }
+  mkdir -p "$(dirname "$PLUGIN_LINK")"
+  if [[ -e $PLUGIN_LINK && ! -L $PLUGIN_LINK ]]; then
+    echo "$PLUGIN_LINK exists and isn't a link; move it away first." >&2
+    exit 1
+  fi
+  ln -sfn "$PLUGIN_SRC" "$PLUGIN_LINK"
+  echo "Linked the bar plugin"
+
+  if ! jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/dev/null 2>&1; then
+    omarchy-bar put "$WIDGET" --section right --index 0 >/dev/null 2>&1 || true
+    # Make sure it landed in shell.json (the shell hot-reloads it).
+    if ! jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/dev/null 2>&1; then
+      local tmp
+      tmp=$(mktemp)
+      if [[ -f $SHELL_JSON ]] && jq --arg id "$WIDGET" '.bar.layout.right = [{id: $id}] + (.bar.layout.right // [])' "$SHELL_JSON" >"$tmp"; then
+        cat "$tmp" >"$SHELL_JSON"
+      else
+        echo "Couldn't place the widget; run: omarchy bar put $WIDGET --section right --index 0" >&2
+      fi
+      rm -f "$tmp"
+    fi
+  fi
+  echo "Added the palm tree to your bar"
+
+  if ! { [[ -f $MENU ]] && grep -q '"poolsuite"[[:space:]]*:' "$MENU"; }; then
+    mkdir -p "$(dirname "$MENU")"
+    if [[ ! -f $MENU ]]; then
+      printf '{\n%s\n}\n' "$MENU_ENTRY" >"$MENU"
+    elif grep -q '^[[:space:]]*{[[:space:]]*$' "$MENU"; then
+      # Right after the opening brace; trailing commas are fine in this file.
+      local tmp
+      tmp=$(mktemp)
+      awk -v entry="$MENU_ENTRY" '!done && /^[[:space:]]*\{[[:space:]]*$/ { print; print entry; done = 1; next } { print }' "$MENU" >"$tmp" &&
+        cat "$tmp" >"$MENU"
+      rm -f "$tmp"
+    else
+      echo "Couldn't add the Super+Space entry automatically; add this line to $MENU:" >&2
+      echo "$MENU_ENTRY" >&2
+    fi
+  fi
+  echo "Added Poolsuite to the Super+Space menu"
+}
+
+unsetup() {
+  quit
+  if [[ -f $SHELL_JSON ]] && jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/dev/null 2>&1; then
+    local tmp
+    tmp=$(mktemp)
+    jq --arg id "$WIDGET" '.bar.layout |= map_values(if type == "array" then map(select(.id != $id)) else . end)' \
+      "$SHELL_JSON" >"$tmp" && cat "$tmp" >"$SHELL_JSON"
+    rm -f "$tmp"
+  fi
+  [[ -f $MENU ]] && sed -i '/^[[:space:]]*"poolsuite"[[:space:]]*:[[:space:]]*{.*"action":"poolsuite".*},\{0,1\}[[:space:]]*$/d' "$MENU"
+  [[ -L $PLUGIN_LINK ]] && rm -f "$PLUGIN_LINK"
+  rm -rf "$STATE" "$CACHE"
+  echo "Poolsuite is off your bar and menu."
+}
+
 case "${1:-open}" in
   open) omarchy-shell shell toggle "$WIDGET" >/dev/null 2>&1 ;;
   play | start) play "${2:-}" ;;
@@ -180,14 +262,22 @@ case "${1:-open}" in
     esac
     omarchy-bar set "$WIDGET" theme "$name" >/dev/null
     ;;
+  setup) setup ;;
+  unsetup) unsetup ;;
   update)
-    # The installed files are symlinks into the code checkout.
-    code=$(dirname "$(dirname "$(readlink -f "$0")")")
-    git -C "$code" pull --ff-only && exec bash "$code/install.sh"
+    if ((PACKAGED)); then
+      echo "Installed as a package: update it with your system (yay, or omarchy update)."
+    else
+      git -C "$CODE" pull --ff-only && exec bash "$CODE/install.sh"
+    fi
     ;;
   uninstall)
-    code=$(dirname "$(dirname "$(readlink -f "$0")")")
-    exec bash "$code/uninstall.sh" "${@:2}"
+    if ((PACKAGED)); then
+      unsetup
+      echo "Now remove the package:  yay -R omarchy-poolsuite"
+    else
+      exec bash "$CODE/uninstall.sh" "${@:2}"
+    fi
     ;;
   adopt) adopt_list "$(channel)" ;;
   refresh) shift; refresh_lists 1 "$@" ;;

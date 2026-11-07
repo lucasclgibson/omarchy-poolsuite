@@ -1,0 +1,43 @@
+# Maintainer: lucasclgibson <https://github.com/lucasclgibson>
+pkgname=omarchy-poolsuite
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Pixel-art Poolsuite FM player for the Omarchy bar (unofficial)"
+arch=(any)
+url="https://github.com/lucasclgibson/omarchy-poolsuite"
+license=(MIT CC-BY-SA-4.0)
+depends=(bash mpv mpv-mpris yt-dlp jq socat)
+install=omarchy-poolsuite.install
+_chicago=dca7a9e4f2b971e39cf3a5e8a3f9309d4293d56d
+_pcfonts=oldschool_pc_font_pack_v2.2_linux.zip
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
+        "ChicagoKare-Regular-$_chicago.ttf::https://raw.githubusercontent.com/KingDuane/Chicago-Kare/$_chicago/ChicagoKare-Regular.ttf"
+        "ChicagoKare-LICENSE-$_chicago::https://raw.githubusercontent.com/KingDuane/Chicago-Kare/$_chicago/LICENSE"
+        "$_pcfonts::https://int10h.org/oldschool-pc-fonts/download/$_pcfonts")
+noextract=("$_pcfonts")
+sha256sums=('SKIP'
+            '23d870a6138aedf9c8479a537f7da47881bf2d6fef51d275b4031c67513057af'
+            '2920e2c708b6f166eb065faecd1cb7494c1fc1df11cddc88ce727710326b2523'
+            'b30dc3ecc9931ad2dd8be7517dd01813c8834a1911b582ab7643191b41a3d759')
+
+prepare() {
+  # Only the one font (and its licence) from the PC font pack.
+  bsdtar -xf "$_pcfonts" "ttf - Px (pixel outline)/PxPlus_IBM_VGA_8x16.ttf" LICENSE.TXT
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  local share="$pkgdir/usr/share/$pkgname"
+
+  install -Dm755 bin/poolsuite "$pkgdir/usr/bin/poolsuite"
+  install -Dm644 -t "$share/plugin" plugin/*
+  install -Dm644 share/guard.lua "$share/share/guard.lua"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+  # Fonts for the classic look.
+  install -Dm644 "$srcdir/ChicagoKare-Regular-$_chicago.ttf" "$pkgdir/usr/share/fonts/$pkgname/ChicagoKare-Regular.ttf"
+  install -Dm644 "$srcdir/ttf - Px (pixel outline)/PxPlus_IBM_VGA_8x16.ttf" "$pkgdir/usr/share/fonts/$pkgname/PxPlus_IBM_VGA_8x16.ttf"
+  install -Dm644 "$srcdir/ChicagoKare-LICENSE-$_chicago" "$pkgdir/usr/share/licenses/$pkgname/ChicagoKare-LICENSE"
+  install -Dm644 "$srcdir/LICENSE.TXT" "$pkgdir/usr/share/licenses/$pkgname/int10h-LICENSE.TXT"
+}

@@ -1,0 +1,15 @@
+post_install() {
+  echo
+  echo "  Poolsuite is installed. Add it to your bar and Super+Space menu with:"
+  echo
+  echo "      poolsuite setup"
+  echo
+  echo "  (run it as yourself, not with sudo; it only edits ~/.config/omarchy)"
+  echo
+}
+
+post_remove() {
+  echo "  If you didn't run 'poolsuite unsetup' first, tidy up with:"
+  echo "      rm ~/.config/omarchy/plugins/poolsuite"
+  echo "  and remove the \"poolsuite\" line from ~/.config/omarchy/extensions/omarchy-menu.jsonc"
+}

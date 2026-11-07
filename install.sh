@@ -5,8 +5,8 @@
 #
 # It fetches the code into ~/.local/share/omarchy-poolsuite, installs any
 # missing packages (asks for your password once), fetches the classic-look
-# fonts, puts the palm tree on your bar and adds "Poolsuite" to the
-# Super+Space menu. Run it again any time to update; `poolsuite update` does
+# fonts, then runs `poolsuite setup` (palm tree on the bar, "Poolsuite" in the
+# Super+Space menu). Run it again any time to update; `poolsuite update` does
 # the same. Remove everything with `poolsuite uninstall`.
 #
 # From a clone you can also run ./install.sh directly; the installed files are
@@ -55,19 +55,16 @@ if ((${#missing[@]})); then
   omarchy pkg add "${missing[@]}"
 fi
 
-# ---- files (symlinked to the code, so updating the code updates everything) --------
+# ---- the command (symlinked to the code, so updating the code updates everything) --
 BIN="$HOME/.local/bin"
-SHARE="${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite"
-PLUGIN="$HOME/.config/omarchy/plugins/poolsuite"
 FONTS="${XDG_DATA_HOME:-$HOME/.local/share}/fonts/poolsuite"
 
 say "Installing the player"
 chmod +x "$REPO/bin/poolsuite" "$REPO/install.sh" "$REPO/uninstall.sh"
-mkdir -p "$BIN" "$SHARE" "$(dirname "$PLUGIN")"
+mkdir -p "$BIN"
 ln -sfn "$REPO/bin/poolsuite" "$BIN/poolsuite"
-ln -sfn "$REPO/share/guard.lua" "$SHARE/guard.lua"
-[[ -L $PLUGIN || ! -e $PLUGIN ]] || rm -rf "$PLUGIN"
-ln -sfn "$REPO/plugin" "$PLUGIN"
+# Tidy up a file from older versions (the guard now lives with the code).
+rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite/guard.lua"
 
 # ---- fonts for the classic look (from their original sources, checked) --------------
 CHICAGO_URL="https://raw.githubusercontent.com/KingDuane/Chicago-Kare/dca7a9e4f2b971e39cf3a5e8a3f9309d4293d56d/ChicagoKare-Regular.ttf"
@@ -101,42 +98,9 @@ if [[ ! -f $FONTS/ChicagoKare-Regular.ttf || ! -f $FONTS/PxPlus_IBM_VGA_8x16.ttf
   fc-cache -f "$FONTS" >/dev/null 2>&1 || true
 fi
 
-# ---- bar ------------------------------------------------------------------------------
-SHELL_JSON="$HOME/.config/omarchy/shell.json"
-if jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/dev/null 2>&1; then
-  :
-else
-  say "Adding the palm tree to your bar"
-  omarchy-bar put "$WIDGET" --section right --index 0 >/dev/null 2>&1 || true
-  # Make sure it landed in shell.json (the shell hot-reloads it).
-  if ! jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/dev/null 2>&1; then
-    if [[ -f $SHELL_JSON ]] && jq --arg id "$WIDGET" '.bar.layout.right = [{id: $id}] + (.bar.layout.right // [])' \
-      "$SHELL_JSON" >"$tmp/shell.json" 2>/dev/null; then
-      cat "$tmp/shell.json" >"$SHELL_JSON"
-    else
-      warn "Couldn't place the widget; add it with: omarchy bar put $WIDGET --section right --index 0"
-    fi
-  fi
-fi
-
-# ---- Super+Space menu -------------------------------------------------------------------
-MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
-ENTRY='  "poolsuite": {"icon":"󱁕","label":"Poolsuite","description":"Ultra-summer internet radio in the bar","action":"poolsuite","aliases":["radio","music"]},'
-if [[ -f $MENU ]] && grep -q '"poolsuite"[[:space:]]*:' "$MENU"; then
-  :
-else
-  say "Adding Poolsuite to the Super+Space menu"
-  mkdir -p "$(dirname "$MENU")"
-  if [[ -f $MENU ]] && grep -q '^[[:space:]]*{[[:space:]]*$' "$MENU"; then
-    # Insert right after the opening brace (trailing commas are fine in this file).
-    awk -v entry="$ENTRY" '!done && /^[[:space:]]*\{[[:space:]]*$/ { print; print entry; done = 1; next } { print }' "$MENU" >"$tmp/menu" &&
-      cat "$tmp/menu" >"$MENU"
-  elif [[ ! -f $MENU ]]; then
-    printf '{\n%s\n}\n' "$ENTRY" >"$MENU"
-  else
-    warn "Couldn't add the menu entry automatically; see extras/omarchy-menu.jsonc"
-  fi
-fi
+# ---- bar + Super+Space menu (only touches ~/.config/omarchy) ---------------------------
+say "Adding Poolsuite to your bar and menu"
+"$REPO/bin/poolsuite" setup >/dev/null
 
 cat <<EOF
 
