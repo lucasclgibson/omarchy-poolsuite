@@ -1,0 +1,3 @@
+// Poolsuite in the Super+Space menu: paste this line inside the object in
+// ~/.config/omarchy/extensions/omarchy-menu.jsonc (it hot-reloads).
+"poolsuite": {"icon":"󱁕","label":"Poolsuite","description":"Ultra-summer internet radio in the bar","action":"poolsuite","aliases":["radio","music"]},

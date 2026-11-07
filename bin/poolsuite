@@ -1,0 +1,196 @@
+#!/bin/bash
+# Poolsuite for Omarchy: a headless mpv radio playing Poolsuite's public
+# SoundCloud playlists (list from github.com/jamespember/poolsuite-cli). The
+# player UI is the bar's palm widget (~/.config/omarchy/plugins/poolsuite), which
+# talks to mpv over MPRIS (mpv-mpris).
+#
+#   poolsuite                  open the bar player
+#   poolsuite play [channel]   start the radio (last channel by default)
+#   poolsuite toggle           play/pause, starting the radio if it's off
+#   poolsuite next | previous | pause
+#   poolsuite quit             turn the radio off
+#   poolsuite channels         list channels
+#   poolsuite status           JSON: running, pid, bus, channel
+#   poolsuite refresh [ch…]    rebuild the cached track lists (all by default)
+#   poolsuite theme [omarchy|poolsuite]  show or set the player's look
+#
+# Track names: each channel is played from a cached .m3u with every track's
+# "Artist - Title" (built once with yt-dlp, ~20 s per channel, refreshed weekly
+# in the background). mpv shows that title while a track is still loading, so
+# skip notifications name the song instead of a SoundCloud track number.
+
+set -u
+
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/poolsuite"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/poolsuite"
+SOCK="${XDG_RUNTIME_DIR:-/tmp}/poolsuite-mpv.sock"
+WIDGET="lucasclgibson.poolsuite"
+GUARD="${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite/guard.lua"
+mkdir -p "$STATE" "$CACHE"
+
+declare -A URLS=(
+  [official]="https://soundcloud.com/poolsuite/sets/poolsuite-fm-official-playlist"
+  [official2]="https://soundcloud.com/poolsuite/sets/poolsuite-fm-official-playlist-two"
+  [balearic]="https://soundcloud.com/poolsuite/sets/balearic-sundown"
+  [indie]="https://soundcloud.com/poolsuite/sets/indie-summer"
+  [tokyo]="https://soundcloud.com/poolsuite/sets/tokyo-disco"
+  [friday]="https://soundcloud.com/poolsuite/sets/friday-nite-heat"
+  [hangover]="https://soundcloud.com/poolsuite/sets/hangover-club"
+  [mixtapes]="https://soundcloud.com/poolsuite/sets/poolsuite-mixtapes"
+)
+ORDER=(official official2 balearic indie tokyo friday hangover mixtapes)
+
+pid_of() {
+  local pid
+  pid=$(cat "$STATE/pid" 2>/dev/null) || return 1
+  [[ -n $pid && -r /proc/$pid/cmdline ]] && tr '\0' ' ' <"/proc/$pid/cmdline" | grep -q -- "--input-ipc-server=$SOCK" && echo "$pid"
+}
+
+bus_of() {
+  # mpv-mpris takes org.mpris.MediaPlayer2.mpv, or .mpv.instance<pid> when another mpv has it.
+  busctl --user list --no-legend 2>/dev/null | awk -v p="$1" '$1 ~ /^org\.mpris\.MediaPlayer2\.mpv/ && $2 == p { print $1; exit }'
+}
+
+mpris() {
+  local pid bus
+  pid=$(pid_of) || return 1
+  bus=$(bus_of "$pid")
+  [[ -n $bus ]] && busctl --user call "$bus" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player "$1" >/dev/null 2>&1
+}
+
+channel() { cat "$STATE/channel" 2>/dev/null || echo official; }
+
+# Write $CACHE/<ch>.m3u with "#EXTINF:<secs>,Artist - Title" for every track.
+build_list() {
+  local ch=$1 tmp
+  tmp=$(mktemp "$CACHE/.$ch.XXXXXX")
+  trap 'rm -f "$tmp"' RETURN
+  if timeout 180 yt-dlp -i -J --no-warnings "${URLS[$ch]}" 2>/dev/null | jq -r '
+      "#EXTM3U",
+      (.entries[]? | select(.webpage_url != null) |
+        ((.artist // .uploader // "") | gsub("[\r\n]"; " ")) as $a |
+        ((.track // .title // "") | gsub("[\r\n]"; " ")) as $t |
+        "#EXTINF:\((.duration // 0) | floor),\(if $a == "" or ($t | ascii_downcase | contains($a | ascii_downcase)) then $t else "\($a) - \($t)" end)",
+        .webpage_url)' >"$tmp" && [[ $(grep -c '^https://' "$tmp") -gt 0 ]]; then
+    chmod 644 "$tmp"
+    mv "$tmp" "$CACHE/$ch.m3u"
+    rm -f "$CACHE/.$ch.failed"
+    adopt_list "$ch"
+  else
+    # SoundCloud refuses or rate-limits now and then; back off for a while.
+    touch "$CACHE/.$ch.failed"
+    return 1
+  fi
+}
+
+# If <ch> is playing from the bare SoundCloud set, swap in its titled list
+# after the current song (no interruption): keep the current entry, append the
+# list, reshuffle.
+adopt_list() {
+  local ch=$1
+  pid_of >/dev/null || return 0
+  [[ $(channel) == "$ch" && $(cat "$STATE/source" 2>/dev/null) != "$CACHE/$ch.m3u" ]] || return 0
+  {
+    printf '{"command":["playlist-clear"]}\n'
+    printf '{"command":["loadlist","%s","append"]}\n' "$CACHE/$ch.m3u"
+    printf '{"command":["playlist-shuffle"]}\n'
+  } | socat - "UNIX-CONNECT:$SOCK" >/dev/null 2>&1 && echo "$CACHE/$ch.m3u" >"$STATE/source"
+}
+
+# Build missing or week-old lists, the given channel first. One run at a time.
+refresh_lists() {
+  local force=$1; shift
+  exec 9>"$CACHE/.lock"
+  flock -n 9 || return 0
+  local ch list=("$@" "${ORDER[@]}")
+  [[ $force == 1 && $# -gt 0 ]] && list=("$@")
+  for ch in "${list[@]}"; do
+    if [[ $force == 1 || ! -s $CACHE/$ch.m3u || -n $(find "$CACHE/$ch.m3u" -mtime +7 2>/dev/null) ]]; then
+      # Skip channels that failed in the last 6 hours unless forced.
+      [[ $force != 1 && -n $(find "$CACHE/.$ch.failed" -mmin -360 2>/dev/null) ]] && continue
+      build_list "$ch"
+    fi
+  done
+}
+
+source_for() {
+  # The cached list when there is one; otherwise the SoundCloud set itself.
+  if [[ -s $CACHE/$1.m3u ]]; then echo "$CACHE/$1.m3u"; else echo "${URLS[$1]}"; fi
+}
+
+play() {
+  local ch="${1:-$(channel)}"
+  [[ -n ${URLS[$ch]:-} ]] || { echo "unknown channel: $ch (try: ${ORDER[*]})" >&2; exit 1; }
+
+  # Same channel and already running: just make sure it's playing.
+  if pid=$(pid_of) && [[ $ch == "$(channel)" ]]; then
+    mpris Play
+    return
+  fi
+  quit
+  echo "$ch" >"$STATE/channel"
+  rm -f "$STATE/error"
+  local guard=""
+  [[ -f $GUARD ]] && guard="--script=$GUARD"
+  POOLSUITE_STATE="$STATE" setsid mpv $guard --no-video --no-terminal --shuffle --loop-playlist=inf --prefetch-playlist=yes \
+    --ytdl-format=bestaudio --volume="$(cat "$STATE/volume" 2>/dev/null || echo 70)" \
+    --title="Poolsuite" --input-ipc-server="$SOCK" "$(source_for "$ch")" >/dev/null 2>&1 &
+  echo $! >"$STATE/pid"
+  source_for "$ch" >"$STATE/source"
+  # Keep the track lists fresh in the background (no-op when they're current).
+  setsid nice -n 10 "$0" refresh-missing "$ch" >/dev/null 2>&1 </dev/null &
+}
+
+quit() {
+  local pid
+  pid=$(pid_of) || return 0
+  # Remember the volume for next time.
+  local bus vol
+  bus=$(bus_of "$pid")
+  if [[ -n $bus ]]; then
+    vol=$(busctl --user get-property "$bus" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player Volume 2>/dev/null | awk '{printf "%d", $2 * 100}')
+    [[ -n $vol ]] && echo "$vol" >"$STATE/volume"
+  fi
+  kill "$pid" 2>/dev/null
+  rm -f "$STATE/pid"
+}
+
+case "${1:-open}" in
+  open) omarchy-shell shell toggle "$WIDGET" >/dev/null 2>&1 ;;
+  play | start) play "${2:-}" ;;
+  toggle | play-pause) pid_of >/dev/null && mpris PlayPause || play ;;
+  pause) mpris Pause ;;
+  next) mpris Next ;;
+  previous | prev) mpris Previous ;;
+  quit | stop | off) quit ;;
+  channels) printf '%s\n' "${ORDER[@]}" ;;
+  theme)
+    # Stored as `theme` on the widget's entry in the bar layout (shell.json).
+    if [[ -z ${2:-} ]]; then
+      t=$(omarchy-bar get "$WIDGET" theme 2>/dev/null)
+      echo "${t:-Omarchy}"
+      exit 0
+    fi
+    case ${2,,} in
+      omarchy) name=Omarchy ;;
+      poolsuite | classic) name=Poolsuite ;;
+      *) echo "usage: poolsuite theme [omarchy|poolsuite]" >&2; exit 1 ;;
+    esac
+    omarchy-bar set "$WIDGET" theme "$name" >/dev/null
+    ;;
+  adopt) adopt_list "$(channel)" ;;
+  refresh) shift; refresh_lists 1 "$@" ;;
+  refresh-missing) shift; refresh_lists 0 "$@" ;;
+  status)
+    if pid=$(pid_of); then
+      printf '{"running":true,"pid":%s,"bus":"%s","channel":"%s"}\n' "$pid" "$(bus_of "$pid")" "$(channel)"
+    else
+      printf '{"running":false,"pid":0,"bus":"","channel":"%s","error":%s}\n' "$(channel)" \
+        "$(jq -Rs . 2>/dev/null <"$STATE/error" || echo '""')"
+    fi
+    ;;
+  *)
+    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+    ;;
+esac

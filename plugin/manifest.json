@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "lucasclgibson.poolsuite",
+  "name": "Poolsuite",
+  "version": "1.0.0",
+  "author": "lucasclgibson",
+  "license": "MIT",
+  "description": "Poolsuite radio player in the bar: a palm-tree pill with a Poolsuite-styled popup. Audio is a headless mpv started by ~/.local/bin/poolsuite.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "Poolsuite",
+    "description": "Ultra-summer internet radio with play/pause, skip and channels",
+    "category": "Audio",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "theme": "Omarchy"
+    },
+    "schema": [
+      {
+        "key": "theme",
+        "type": "enum",
+        "label": "Player look",
+        "options": [
+          "Omarchy",
+          "Poolsuite"
+        ],
+        "defaultValue": "Omarchy",
+        "description": "Omarchy follows your current theme and font. Poolsuite is the classic System 7 cream, aqua and pink."
+      }
+    ]
+  }
+}
