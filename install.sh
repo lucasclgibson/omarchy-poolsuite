@@ -1,120 +1,144 @@
 #!/bin/bash
-# Install Poolsuite for Omarchy.
+# Poolsuite for Omarchy installer. One line:
 #
-#   ./install.sh          copy the files into place
-#   ./install.sh --link   symlink them to this checkout instead (for hacking on it)
+#   curl -fsSL https://raw.githubusercontent.com/lucasclgibson/omarchy-poolsuite/main/install.sh | bash
 #
-# Installs:
-#   ~/.local/bin/poolsuite                    the radio engine + CLI
-#   ~/.local/share/poolsuite/guard.lua        mpv safeguard
-#   ~/.config/omarchy/plugins/poolsuite/      the bar widget + player
-#   ~/.local/share/fonts/poolsuite/           Chicago Kare + IBM VGA 8x16 (classic look)
-# and puts the widget at the start of the bar's right section.
+# It fetches the code into ~/.local/share/omarchy-poolsuite, installs any
+# missing packages (asks for your password once), fetches the classic-look
+# fonts, puts the palm tree on your bar and adds "Poolsuite" to the
+# Super+Space menu. Run it again any time to update; `poolsuite update` does
+# the same. Remove everything with `poolsuite uninstall`.
+#
+# From a clone you can also run ./install.sh directly; the installed files are
+# then symlinked to that clone.
 
 set -euo pipefail
 
-REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_URL="${POOLSUITE_REPO:-https://github.com/lucasclgibson/omarchy-poolsuite.git}"
+SRC="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-poolsuite"
 WIDGET="lucasclgibson.poolsuite"
+
+say() { printf '\033[1;36m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
+warn() { printf '\033[33m%s\033[0m\n' "$*" >&2; }
+die() { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
+
+# ---- Omarchy? -------------------------------------------------------------------
+command -v omarchy >/dev/null && command -v omarchy-bar >/dev/null && command -v omarchy-shell >/dev/null ||
+  die "This needs Omarchy (https://omarchy.org) with its Quickshell bar."
+
+# ---- piped from curl: fetch the code, then run the real installer from it ----------
+here=""
+if [[ -n ${BASH_SOURCE[0]:-} && -f ${BASH_SOURCE[0]} ]]; then
+  here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+fi
+if [[ -z $here || ! -f $here/plugin/manifest.json ]]; then
+  command -v git >/dev/null || omarchy pkg add git
+  if [[ -d $SRC/.git ]]; then
+    say "Updating Poolsuite"
+    git -C "$SRC" pull --ff-only -q
+  else
+    say "Downloading Poolsuite"
+    git clone -q --depth 1 "$REPO_URL" "$SRC"
+  fi
+  # Give the real installer the terminal (for the sudo prompt) when there is one.
+  if (exec </dev/tty) 2>/dev/null; then exec bash "$SRC/install.sh" "$@" </dev/tty; fi
+  exec bash "$SRC/install.sh" "$@"
+fi
+REPO=$here
+
+# ---- packages -----------------------------------------------------------------------
+PKGS=(mpv mpv-mpris yt-dlp jq socat unzip curl)
+missing=()
+for p in "${PKGS[@]}"; do pacman -Q "$p" >/dev/null 2>&1 || missing+=("$p"); done
+if ((${#missing[@]})); then
+  say "Installing packages: ${missing[*]}"
+  omarchy pkg add "${missing[@]}"
+fi
+
+# ---- files (symlinked to the code, so updating the code updates everything) --------
 BIN="$HOME/.local/bin"
 SHARE="${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite"
 PLUGIN="$HOME/.config/omarchy/plugins/poolsuite"
 FONTS="${XDG_DATA_HOME:-$HOME/.local/share}/fonts/poolsuite"
 
-LINK=0
-[[ ${1:-} == "--link" ]] && LINK=1
+say "Installing the player"
+chmod +x "$REPO/bin/poolsuite" "$REPO/install.sh" "$REPO/uninstall.sh"
+mkdir -p "$BIN" "$SHARE" "$(dirname "$PLUGIN")"
+ln -sfn "$REPO/bin/poolsuite" "$BIN/poolsuite"
+ln -sfn "$REPO/share/guard.lua" "$SHARE/guard.lua"
+[[ -L $PLUGIN || ! -e $PLUGIN ]] || rm -rf "$PLUGIN"
+ln -sfn "$REPO/plugin" "$PLUGIN"
 
-say() { printf '\033[1m%s\033[0m\n' "$*"; }
-
-# ---- dependencies -------------------------------------------------------------
-missing=()
-for cmd in mpv yt-dlp jq socat busctl curl unzip fc-cache omarchy-bar omarchy-shell; do
-  command -v "$cmd" >/dev/null || missing+=("$cmd")
-done
-mpris_found=0
-for f in /etc/mpv/scripts/mpris.so /usr/lib/mpv-mpris/mpris.so "$HOME/.config/mpv/scripts/mpris.so"; do
-  [[ -e $f ]] && mpris_found=1
-done
-((mpris_found)) || missing+=("mpv-mpris")
-
-if ((${#missing[@]})); then
-  echo "Missing: ${missing[*]}"
-  if [[ " ${missing[*]} " == *" omarchy-bar "* || " ${missing[*]} " == *" omarchy-shell "* ]]; then
-    echo "This needs Omarchy (https://omarchy.org) with its Quickshell bar."
-  fi
-  echo "Install the packages with:  omarchy pkg add mpv mpv-mpris yt-dlp jq socat"
-  exit 1
-fi
-
-# ---- files ----------------------------------------------------------------------
-place() { # place <source> <target>
-  mkdir -p "$(dirname "$2")"
-  if ((LINK)); then ln -sfn "$1" "$2"; else rm -rf "$2"; cp -r "$1" "$2"; fi
-}
-
-say "Installing files"
-place "$REPO/bin/poolsuite" "$BIN/poolsuite"
-chmod +x "$REPO/bin/poolsuite"
-place "$REPO/share/guard.lua" "$SHARE/guard.lua"
-if ((LINK)); then
-  rm -rf "$PLUGIN"
-  place "$REPO/plugin" "$PLUGIN"
-else
-  mkdir -p "$PLUGIN"
-  cp "$REPO"/plugin/* "$PLUGIN/"
-fi
-
-case ":$PATH:" in
-  *":$BIN:"*) ;;
-  *) echo "Note: $BIN is not on your PATH." ;;
-esac
-
-# ---- fonts (classic look) -----------------------------------------------------
-# Fetched from their original sources and checked, not bundled here.
+# ---- fonts for the classic look (from their original sources, checked) --------------
 CHICAGO_URL="https://raw.githubusercontent.com/KingDuane/Chicago-Kare/dca7a9e4f2b971e39cf3a5e8a3f9309d4293d56d/ChicagoKare-Regular.ttf"
 CHICAGO_SHA="23d870a6138aedf9c8479a537f7da47881bf2d6fef51d275b4031c67513057af"
 CHICAGO_LICENSE="https://raw.githubusercontent.com/KingDuane/Chicago-Kare/dca7a9e4f2b971e39cf3a5e8a3f9309d4293d56d/LICENSE"
 VGA_URL="https://int10h.org/oldschool-pc-fonts/download/oldschool_pc_font_pack_v2.2_linux.zip"
 VGA_SHA="b30dc3ecc9931ad2dd8be7517dd01813c8834a1911b582ab7643191b41a3d759"
 
+fetch() { # fetch <url> <sha256> <out>
+  curl -fsSL "$1" -o "$3" && echo "$2  $3" | sha256sum -c --quiet - >/dev/null 2>&1
+}
+
 mkdir -p "$FONTS"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-
-fetch() { # fetch <url> <sha256> <out>
-  curl -fsSL "$1" -o "$3"
-  echo "$2  $3" | sha256sum -c --quiet - || { echo "Checksum mismatch for $1" >&2; return 1; }
-}
-
-if [[ ! -f $FONTS/ChicagoKare-Regular.ttf ]]; then
-  say "Fetching Chicago Kare (MIT)"
-  fetch "$CHICAGO_URL" "$CHICAGO_SHA" "$tmp/ChicagoKare-Regular.ttf"
-  cp "$tmp/ChicagoKare-Regular.ttf" "$FONTS/"
-  curl -fsSL "$CHICAGO_LICENSE" -o "$FONTS/ChicagoKare-LICENSE" || true
+if [[ ! -f $FONTS/ChicagoKare-Regular.ttf || ! -f $FONTS/PxPlus_IBM_VGA_8x16.ttf ]]; then
+  say "Fetching the retro fonts"
+  if fetch "$CHICAGO_URL" "$CHICAGO_SHA" "$tmp/ChicagoKare-Regular.ttf"; then
+    cp "$tmp/ChicagoKare-Regular.ttf" "$FONTS/"
+    curl -fsSL "$CHICAGO_LICENSE" -o "$FONTS/ChicagoKare-LICENSE" || true
+  else
+    warn "Couldn't fetch Chicago Kare; the classic look will use a fallback font."
+  fi
+  if fetch "$VGA_URL" "$VGA_SHA" "$tmp/pc.zip"; then
+    unzip -o -j -q "$tmp/pc.zip" "ttf - Px (pixel outline)/PxPlus_IBM_VGA_8x16.ttf" LICENSE.TXT -d "$tmp"
+    cp "$tmp/PxPlus_IBM_VGA_8x16.ttf" "$FONTS/"
+    cp "$tmp/LICENSE.TXT" "$FONTS/int10h-LICENSE.TXT"
+  else
+    warn "Couldn't fetch the IBM VGA font; the classic look will use a fallback font."
+  fi
+  fc-cache -f "$FONTS" >/dev/null 2>&1 || true
 fi
-if [[ ! -f $FONTS/PxPlus_IBM_VGA_8x16.ttf ]]; then
-  say "Fetching IBM VGA 8x16 from the Ultimate Oldschool PC Font Pack (CC BY-SA 4.0)"
-  fetch "$VGA_URL" "$VGA_SHA" "$tmp/pc.zip"
-  unzip -o -j -q "$tmp/pc.zip" "ttf - Px (pixel outline)/PxPlus_IBM_VGA_8x16.ttf" LICENSE.TXT -d "$tmp"
-  cp "$tmp/PxPlus_IBM_VGA_8x16.ttf" "$FONTS/"
-  cp "$tmp/LICENSE.TXT" "$FONTS/int10h-LICENSE.TXT"
-fi
-fc-cache -f "$FONTS" >/dev/null
 
-# ---- bar ------------------------------------------------------------------------
-if jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$HOME/.config/omarchy/shell.json" >/dev/null 2>&1; then
-  say "Widget already on the bar"
+# ---- bar ------------------------------------------------------------------------------
+SHELL_JSON="$HOME/.config/omarchy/shell.json"
+if jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/dev/null 2>&1; then
+  :
 else
-  say "Adding the widget to the bar"
-  omarchy-bar put "$WIDGET" --section right --index 0 >/dev/null
+  say "Adding the palm tree to your bar"
+  omarchy-bar put "$WIDGET" --section right --index 0 >/dev/null 2>&1 ||
+    warn "Couldn't place the widget; add it with: omarchy bar put $WIDGET --section right --index 0"
+fi
+
+# ---- Super+Space menu -------------------------------------------------------------------
+MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
+ENTRY='  "poolsuite": {"icon":"󱁕","label":"Poolsuite","description":"Ultra-summer internet radio in the bar","action":"poolsuite","aliases":["radio","music"]},'
+if [[ -f $MENU ]] && grep -q '"poolsuite"[[:space:]]*:' "$MENU"; then
+  :
+else
+  say "Adding Poolsuite to the Super+Space menu"
+  mkdir -p "$(dirname "$MENU")"
+  if [[ -f $MENU ]] && grep -q '^[[:space:]]*{[[:space:]]*$' "$MENU"; then
+    # Insert right after the opening brace (trailing commas are fine in this file).
+    awk -v entry="$ENTRY" '!done && /^[[:space:]]*\{[[:space:]]*$/ { print; print entry; done = 1; next } { print }' "$MENU" >"$tmp/menu" &&
+      cat "$tmp/menu" >"$MENU"
+  elif [[ ! -f $MENU ]]; then
+    printf '{\n%s\n}\n' "$ENTRY" >"$MENU"
+  else
+    warn "Couldn't add the menu entry automatically; see extras/omarchy-menu.jsonc"
+  fi
 fi
 
 cat <<EOF
 
-Done. Click the palm tree in your bar, or run:  poolsuite
+$(printf '\033[1m')Poolsuite is installed.$(printf '\033[0m')
 
-Optional extras (see README):
-  * Super+Space menu entry and a keybinding: extras/
-  * Classic System 7 look:  poolsuite theme poolsuite
+  Click the palm tree in your bar, pick it from the Super+Space menu,
+  or run:  poolsuite
 
-Track lists are fetched in the background the first time each channel plays.
+  poolsuite theme poolsuite   classic System 7 look (or: omarchy)
+  poolsuite update            get the latest version
+  poolsuite uninstall         remove it
+
 EOF

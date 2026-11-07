@@ -13,6 +13,8 @@
 #   poolsuite status           JSON: running, pid, bus, channel
 #   poolsuite refresh [ch…]    rebuild the cached track lists (all by default)
 #   poolsuite theme [omarchy|poolsuite]  show or set the player's look
+#   poolsuite update           update to the latest version
+#   poolsuite uninstall        remove Poolsuite
 #
 # Track names: each channel is played from a cached .m3u with every track's
 # "Artist - Title" (built once with yt-dlp, ~20 s per channel, refreshed weekly
@@ -177,6 +179,15 @@ case "${1:-open}" in
       *) echo "usage: poolsuite theme [omarchy|poolsuite]" >&2; exit 1 ;;
     esac
     omarchy-bar set "$WIDGET" theme "$name" >/dev/null
+    ;;
+  update)
+    # The installed files are symlinks into the code checkout.
+    code=$(dirname "$(dirname "$(readlink -f "$0")")")
+    git -C "$code" pull --ff-only && exec bash "$code/install.sh"
+    ;;
+  uninstall)
+    code=$(dirname "$(dirname "$(readlink -f "$0")")")
+    exec bash "$code/uninstall.sh" "${@:2}"
     ;;
   adopt) adopt_list "$(channel)" ;;
   refresh) shift; refresh_lists 1 "$@" ;;
