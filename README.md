@@ -19,26 +19,33 @@ A tiny [Poolsuite FM](https://poolsuite.net/) player that lives in the [Omarchy]
 
 ## Install
 
-You need Omarchy with its Quickshell bar, plus:
+On [Omarchy](https://omarchy.org/), paste this into a terminal:
 
 ```bash
-omarchy pkg add mpv mpv-mpris yt-dlp jq socat
+curl -fsSL https://raw.githubusercontent.com/lucasclgibson/omarchy-poolsuite/main/install.sh | bash
 ```
 
-Then:
+That's all. It installs any missing packages (`mpv`, `mpv-mpris`, `yt-dlp`, `jq`, `socat`) and asks for your password once if any are needed. It also fetches the retro fonts, puts the palm tree on your bar and adds **Poolsuite** to the Super+Space menu. Everything else stays in your home folder.
+
+```bash
+poolsuite update      # get the latest version
+poolsuite uninstall   # remove it (add --fonts to remove the fonts too)
+```
+
+<details>
+<summary>Prefer to read it first, or hack on it?</summary>
 
 ```bash
 git clone https://github.com/lucasclgibson/omarchy-poolsuite.git
 cd omarchy-poolsuite
+less install.sh
 ./install.sh
 ```
 
-The installer copies the widget, the `poolsuite` command and a small mpv safeguard into your home folder. It fetches the two free fonts used by the classic look and puts the palm tree at the start of the bar's right-hand section. It doesn't use `sudo` or change anything outside your home folder. If you want to hack on it, use `./install.sh --link` to symlink to the checkout instead.
+Run from a clone, the installed files are symlinked to it, so your edits apply straight away. Run `omarchy restart shell` after changing QML.
 
-### Optional extras
-
-- **Super+Space menu entry:** paste the line from [`extras/omarchy-menu.jsonc`](extras/omarchy-menu.jsonc) into `~/.config/omarchy/extensions/omarchy-menu.jsonc`.
-- **Keybinding** (Super+Alt+P): see [`extras/hyprland-binding.lua`](extras/hyprland-binding.lua).
+A keybinding (Super+Alt+P) is in [`extras/hyprland-binding.lua`](extras/hyprland-binding.lua) if you want one.
+</details>
 
 ## Use
 
@@ -84,9 +91,11 @@ The look is also a widget setting (`theme`: `Omarchy` or `Poolsuite`) on the wid
 ## Uninstall
 
 ```bash
-./uninstall.sh           # keeps the fonts
-./uninstall.sh --fonts   # removes them too
+poolsuite uninstall           # keeps the fonts
+poolsuite uninstall --fonts   # removes them too
 ```
+
+This takes the widget off the bar and the entry out of the menu, and deletes the files. Any packages it installed are left in place.
 
 ## Credits and licences
 
