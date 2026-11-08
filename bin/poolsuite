@@ -8,6 +8,8 @@
 #   poolsuite play [channel]   start the radio (last channel by default)
 #   poolsuite toggle           play/pause, starting the radio if it's off
 #   poolsuite next | previous | pause
+#   poolsuite media-key        what the play key does: pauses another app if one
+#                              is playing, otherwise plays/pauses (or starts) Poolsuite
 #   poolsuite quit             turn the radio off
 #   poolsuite channels         list channels
 #   poolsuite status           JSON: running, pid, bus, channel
@@ -244,6 +246,22 @@ case "${1:-open}" in
   open) omarchy-shell shell toggle "$WIDGET" >/dev/null 2>&1 ;;
   play | start) play "${2:-}" ;;
   toggle | play-pause) pid_of >/dev/null && mpris PlayPause || play ;;
+  media-key)
+    # For the keyboard's play key. Another app playing (and not us): leave it
+    # to Omarchy's normal play/pause. Otherwise play/pause Poolsuite, starting
+    # it if it's off.
+    ours=""
+    pid=$(pid_of) && ours=$(bus_of "$pid")
+    if ! [[ -n $ours && $(busctl --user get-property "$ours" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player PlaybackStatus 2>/dev/null) == *Playing* ]]; then
+      for bus in $(busctl --user list --no-legend 2>/dev/null | awk '$1 ~ /^org\.mpris\.MediaPlayer2\./ && $1 !~ /playerctld/ { print $1 }'); do
+        [[ $bus == "$ours" ]] && continue
+        if [[ $(busctl --user get-property "$bus" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player PlaybackStatus 2>/dev/null) == *Playing* ]]; then
+          exec omarchy-shell media playPause
+        fi
+      done
+    fi
+    [[ -n $ours ]] && mpris PlayPause || play
+    ;;
   pause) mpris Pause ;;
   next) mpris Next ;;
   previous | prev) mpris Previous ;;

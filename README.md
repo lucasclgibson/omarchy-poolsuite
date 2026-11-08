@@ -74,7 +74,7 @@ poolsuite update      # get the latest version (git pull, then re-run the script
 poolsuite uninstall   # undo all of the above (add --fonts to remove the fonts too)
 ```
 
-If you're hacking on it, run `./install.sh` from any clone and everything is linked to that clone, so your edits apply straight away. Run `omarchy restart shell` after changing QML. A keybinding (Super+Alt+P) is in [`extras/hyprland-binding.lua`](extras/hyprland-binding.lua) if you want one.
+If you're hacking on it, run `./install.sh` from any clone and everything is linked to that clone, so your edits apply straight away. Run `omarchy restart shell` after changing QML. Optional keyboard shortcuts are in [`extras/hyprland-binding.lua`](extras/hyprland-binding.lua) (see [Keys](#keys)).
 
 ## Use
 
@@ -89,6 +89,16 @@ In the bar:
 
 In the player, the four transport keys are play/pause, stop (turns the radio off), previous and next. The 🎲 key picks a random channel. The **Channel** box opens a pop-up menu, and the bars next to the speaker set the volume.
 
+### Keys
+
+[`extras/hyprland-binding.lua`](extras/hyprland-binding.lua) adds these shortcuts if you want them. Save it as `~/.config/hypr/poolsuite.lua` and add `require("hypr.poolsuite")` to `~/.config/hypr/hyprland.lua`.
+
+| Key | What it does |
+| --- | --- |
+| Play key (F8 on a Mac) | Starts Poolsuite and plays when nothing else is playing; play/pause once it's on. If another app is playing, it pauses that app as usual. |
+| Super+F8 | Always Poolsuite: start it, or play/pause |
+| Super+Alt+P | Open the bar player |
+
 From a terminal:
 
 ```text
@@ -96,6 +106,7 @@ poolsuite                  open the bar player
 poolsuite play [channel]   start the radio (last channel by default)
 poolsuite toggle           play/pause, starting the radio if it's off
 poolsuite next | previous | pause
+poolsuite media-key        what the play key does (see Keys)
 poolsuite quit             turn the radio off
 poolsuite channels         list channels
 poolsuite theme [omarchy|poolsuite]
