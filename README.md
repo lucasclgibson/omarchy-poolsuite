@@ -19,33 +19,43 @@ A tiny [Poolsuite FM](https://poolsuite.net/) player that lives in the [Omarchy]
 
 ## Install
 
-On [Omarchy](https://omarchy.org/), paste this into a terminal:
+You need [Omarchy](https://omarchy.org/) with its standard bar. Clone it, read the installer if you like (it's short), and run it:
+
+```bash
+git clone https://github.com/lucasclgibson/omarchy-poolsuite.git ~/.local/share/omarchy-poolsuite
+cd ~/.local/share/omarchy-poolsuite
+less install.sh
+./install.sh
+```
+
+Or do the same in one line:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lucasclgibson/omarchy-poolsuite/main/install.sh | bash
 ```
 
-That's all. It installs any missing packages (`mpv`, `mpv-mpris`, `yt-dlp`, `jq`, `socat`) and asks for your password once if any are needed. It also fetches the retro fonts, puts the palm tree on your bar and adds **Poolsuite** to the Super+Space menu. Everything else stays in your home folder.
+Then click the palm tree in your bar, or pick **Poolsuite** from the Super+Space menu.
+
+An AUR package (`yay -S omarchy-poolsuite`) is on the way; its recipe is in [`packaging/aur/`](packaging/aur/).
+
+### What the installer changes
+
+- **Packages:** installs any of `mpv`, `mpv-mpris`, `yt-dlp`, `jq`, `socat`, `unzip` and `curl` that are missing, using `omarchy pkg add`. This is the only step that needs your password, and only when something is missing.
+- **The `poolsuite` command:** links `~/.local/bin/poolsuite` to the code.
+- **Fonts:** downloads the two free fonts for the classic look into `~/.local/share/fonts/poolsuite/` and checks each against a recorded checksum.
+- **`poolsuite setup`:**
+  - links the bar plugin into `~/.config/omarchy/plugins/poolsuite`;
+  - adds the widget's entry to the bar layout in `~/.config/omarchy/shell.json`;
+  - adds one line to `~/.config/omarchy/extensions/omarchy-menu.jsonc` for the Super+Space menu.
+
+Nothing else is touched, and nothing runs as root except the package install. Running it again is safe and doesn't duplicate anything.
 
 ```bash
-poolsuite update      # get the latest version
-poolsuite uninstall   # remove it (add --fonts to remove the fonts too)
+poolsuite update      # get the latest version (git pull, then re-run the installer)
+poolsuite uninstall   # undo all of the above (add --fonts to remove the fonts too)
 ```
 
-<details>
-<summary>Prefer to read it first, or hack on it?</summary>
-
-```bash
-git clone https://github.com/lucasclgibson/omarchy-poolsuite.git
-cd omarchy-poolsuite
-less install.sh
-./install.sh
-```
-
-Run from a clone, the installed files are symlinked to it, so your edits apply straight away. Run `omarchy restart shell` after changing QML.
-
-A keybinding (Super+Alt+P) is in [`extras/hyprland-binding.lua`](extras/hyprland-binding.lua) if you want one.
-</details>
+If you're hacking on it, run `./install.sh` from any clone and everything is linked to that clone, so your edits apply straight away. Run `omarchy restart shell` after changing QML. A keybinding (Super+Alt+P) is in [`extras/hyprland-binding.lua`](extras/hyprland-binding.lua) if you want one.
 
 ## Use
 
@@ -71,6 +81,10 @@ poolsuite quit             turn the radio off
 poolsuite channels         list channels
 poolsuite theme [omarchy|poolsuite]
 poolsuite refresh [ch…]    rebuild the cached track lists
+poolsuite setup            put it on your bar and in the Super+Space menu
+poolsuite unsetup          take it off again
+poolsuite update           get the latest version
+poolsuite uninstall        remove it
 ```
 
 The look is also a widget setting (`theme`: `Omarchy` or `Poolsuite`) on the widget's entry in `~/.config/omarchy/shell.json`.
@@ -81,12 +95,14 @@ The look is also a widget setting (`theme`: `Omarchy` or `Poolsuite`) on the wid
 - **`mpv-mpris`** exposes the player on D-Bus. The bar widget finds that exact `mpv` (by PID) through Quickshell's MPRIS service and drives it directly.
 - **`plugin/`** is the Omarchy shell plugin (Quickshell/QML). `Player.qml` is the popup. `PixelIcon`, `Bevel` and `PText` are the 1-bit sprites, raised keys and pixel type, and they take their colours from the active palette.
 - **`share/guard.lua`** is an mpv script. If five tracks in a row fail to load, it stops the radio and the player shows "Offline" instead of racing through the playlist.
+- **`install.sh`** handles packages, fonts and the command. **`poolsuite setup`** handles the per-user wiring (plugin link, bar entry, menu line), so a system package can reuse it. The script finds its files next to itself in a clone, or in `/usr/share/omarchy-poolsuite` when installed as a package.
 
 ## Troubleshooting
 
 - **"Offline: SoundCloud unavailable".** `yt-dlp` couldn't get tracks from SoundCloud. SoundCloud sometimes rate-limits it (try again later), and SoundCloud changes regularly break older `yt-dlp` versions, so update it. You can test with `yt-dlp -J https://soundcloud.com/poolsuite/sets/tokyo-disco`.
 - **Changes to the QML don't show up.** Run `omarchy restart shell`.
-- **The classic look uses the wrong font.** Re-run `./install.sh` and check that `fc-list | grep -i "chicago kare"` finds it.
+- **The classic look uses the wrong font.** Run `poolsuite update`, or `./install.sh` from your clone, and check that `fc-list | grep -i "chicago kare"` finds it.
+- **The palm tree isn't on the bar.** Run `poolsuite setup`.
 
 ## Uninstall
 
@@ -95,7 +111,7 @@ poolsuite uninstall           # keeps the fonts
 poolsuite uninstall --fonts   # removes them too
 ```
 
-This takes the widget off the bar and the entry out of the menu, and deletes the files. Any packages it installed are left in place.
+This takes the widget off the bar and the entry out of the menu, and deletes the command, the plugin link, the cached track lists and the code in `~/.local/share/omarchy-poolsuite`. Any packages it installed are left in place. A `shell.json` backup is kept next to the original.
 
 ## Credits and licences
 

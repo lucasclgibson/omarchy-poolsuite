@@ -227,6 +227,7 @@ setup() {
 unsetup() {
   quit
   if [[ -f $SHELL_JSON ]] && jq -e --arg id "$WIDGET" 'any(.bar.layout[][]?; .id == $id)' "$SHELL_JSON" >/dev/null 2>&1; then
+    cp "$SHELL_JSON" "$SHELL_JSON.bak.$(date +%s)"
     local tmp
     tmp=$(mktemp)
     jq --arg id "$WIDGET" '.bar.layout |= map_values(if type == "array" then map(select(.id != $id)) else . end)' \
