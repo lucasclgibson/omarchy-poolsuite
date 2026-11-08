@@ -2,7 +2,7 @@
 
 A tiny [Poolsuite FM](https://poolsuite.net/) player that lives in the [Omarchy](https://omarchy.org/) bar. Click the pixel palm tree and a little 90s-style console drops down: now playing, transport keys, eight channels and a volume control. There's no browser and no window. The audio is a headless `mpv` playing Poolsuite's public SoundCloud playlists.
 
-![Poolsuite for Omarchy: the palm tree in the bar and the player open on a laptop](screenshots/mockup.png)
+![Poolsuite for Omarchy: the palm tree in the bar and the player open on a laptop](screenshots/mockup-zoom.png)
 
 | Follows your Omarchy theme | Classic Poolsuite look |
 | --- | --- |
