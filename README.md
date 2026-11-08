@@ -96,7 +96,7 @@ In the player, the four transport keys are play/pause, stop (turns the radio off
 | Key | What it does |
 | --- | --- |
 | Play key (F8 on a Mac) | Starts Poolsuite and plays when nothing else is playing; play/pause once it's on. If another app is playing, it pauses that app as usual. |
-| Super+F8 | Always Poolsuite: start it, or play/pause |
+| Super+F8 | Always Poolsuite: start it or play/pause, and open the player |
 | Super+Alt+P | Open the bar player |
 
 From a terminal:
@@ -104,7 +104,7 @@ From a terminal:
 ```text
 poolsuite                  open the bar player
 poolsuite play [channel]   start the radio (last channel by default)
-poolsuite toggle           play/pause, starting the radio if it's off
+poolsuite toggle [--open]  play/pause, starting the radio if it's off (--open also opens the player)
 poolsuite next | previous | pause
 poolsuite media-key        what the play key does (see Keys)
 poolsuite quit             turn the radio off

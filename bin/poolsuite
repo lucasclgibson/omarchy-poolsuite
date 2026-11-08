@@ -6,7 +6,8 @@
 #
 #   poolsuite                  open the bar player
 #   poolsuite play [channel]   start the radio (last channel by default)
-#   poolsuite toggle           play/pause, starting the radio if it's off
+#   poolsuite toggle [--open]  play/pause, starting the radio if it's off
+#                              (--open also opens the bar player)
 #   poolsuite next | previous | pause
 #   poolsuite media-key        what the play key does: pauses another app if one
 #                              is playing, otherwise plays/pauses (or starts) Poolsuite
@@ -245,7 +246,11 @@ unsetup() {
 case "${1:-open}" in
   open) omarchy-shell shell toggle "$WIDGET" >/dev/null 2>&1 ;;
   play | start) play "${2:-}" ;;
-  toggle | play-pause) pid_of >/dev/null && mpris PlayPause || play ;;
+  toggle | play-pause)
+    # --open also opens the bar player (opens, never closes it).
+    [[ ${2:-} == --open ]] && omarchy-shell shell summon "$WIDGET" >/dev/null 2>&1
+    pid_of >/dev/null && mpris PlayPause || play
+    ;;
   media-key)
     # For the keyboard's play key. Another app playing (and not us): leave it
     # to Omarchy's normal play/pause. Otherwise play/pause Poolsuite, starting
