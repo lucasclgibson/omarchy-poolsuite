@@ -19,7 +19,26 @@ A tiny [Poolsuite FM](https://poolsuite.net/) player that lives in the [Omarchy]
 
 ## Install
 
-You need [Omarchy](https://omarchy.org/) with its standard bar. Clone it, read the installer if you like (it's short), and run it:
+You need [Omarchy](https://omarchy.org/) with its standard bar.
+
+### As a package (recommended)
+
+Build and install it with Arch's standard `makepkg`. It downloads the tagged release and the two fonts, checks each against the checksums in the [`PKGBUILD`](packaging/aur/PKGBUILD) (short, worth a read), and installs everything with pacman. Missing dependencies (`mpv`, `mpv-mpris`, `yt-dlp`, `jq`, `socat`) come with it.
+
+```bash
+git clone https://github.com/lucasclgibson/omarchy-poolsuite.git
+cd omarchy-poolsuite/packaging/aur
+makepkg -si
+poolsuite setup     # as yourself, not sudo: puts it on your bar and in Super+Space
+```
+
+To update, `git pull` and run `makepkg -si` again. To remove it, run `poolsuite unsetup`, then `sudo pacman -R omarchy-poolsuite`.
+
+It will also be on the AUR as `omarchy-poolsuite` (`yay -S omarchy-poolsuite`) once AUR sign-ups reopen. They're currently paused for everyone.
+
+### With the install script
+
+The script installs into your home folder instead of system-wide and follows the latest code on `main`. Read it first if you like:
 
 ```bash
 git clone https://github.com/lucasclgibson/omarchy-poolsuite.git ~/.local/share/omarchy-poolsuite
@@ -28,7 +47,7 @@ less install.sh
 ./install.sh
 ```
 
-Or do the same in one line:
+Or in one line:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lucasclgibson/omarchy-poolsuite/main/install.sh | bash
@@ -36,9 +55,7 @@ curl -fsSL https://raw.githubusercontent.com/lucasclgibson/omarchy-poolsuite/mai
 
 Then click the palm tree in your bar, or pick **Poolsuite** from the Super+Space menu.
 
-An AUR package (`yay -S omarchy-poolsuite`) is on the way; its recipe is in [`packaging/aur/`](packaging/aur/).
-
-### What the installer changes
+### What the install script changes
 
 - **Packages:** installs any of `mpv`, `mpv-mpris`, `yt-dlp`, `jq`, `socat`, `unzip` and `curl` that are missing, using `omarchy pkg add`. This is the only step that needs your password, and only when something is missing.
 - **The `poolsuite` command:** links `~/.local/bin/poolsuite` to the code.
@@ -51,7 +68,7 @@ An AUR package (`yay -S omarchy-poolsuite`) is on the way; its recipe is in [`pa
 Nothing else is touched, and nothing runs as root except the package install. Running it again is safe and doesn't duplicate anything.
 
 ```bash
-poolsuite update      # get the latest version (git pull, then re-run the installer)
+poolsuite update      # get the latest version (git pull, then re-run the script)
 poolsuite uninstall   # undo all of the above (add --fonts to remove the fonts too)
 ```
 
@@ -106,6 +123,15 @@ The look is also a widget setting (`theme`: `Omarchy` or `Poolsuite`) on the wid
 
 ## Uninstall
 
+Installed as a package:
+
+```bash
+poolsuite unsetup                 # off your bar and menu
+sudo pacman -R omarchy-poolsuite
+```
+
+Installed with the script:
+
 ```bash
 poolsuite uninstall           # keeps the fonts
 poolsuite uninstall --fonts   # removes them too
@@ -117,6 +143,6 @@ This takes the widget off the bar and the entry out of the menu, and deletes the
 
 - Code: [MIT](LICENSE).
 - The channel list comes from [jamespember/poolsuite-cli](https://github.com/jamespember/poolsuite-cli) (MIT).
-- [Chicago Kare](https://github.com/KingDuane/Chicago-Kare) by Duane King (MIT), downloaded at install time.
-- IBM VGA 8x16 from [The Ultimate Oldschool PC Font Pack](https://int10h.org/oldschool-pc-fonts/) by VileR ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)), downloaded at install time.
+- [Chicago Kare](https://github.com/KingDuane/Chicago-Kare) by Duane King (MIT), downloaded at install or build time.
+- IBM VGA 8x16 from [The Ultimate Oldschool PC Font Pack](https://int10h.org/oldschool-pc-fonts/) by VileR ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)), downloaded at install or build time.
 - The music and its curation belong to Poolsuite and the artists. This player only plays their public SoundCloud playlists.

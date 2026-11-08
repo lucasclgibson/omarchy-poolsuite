@@ -267,7 +267,8 @@ case "${1:-open}" in
   unsetup) unsetup ;;
   update)
     if ((PACKAGED)); then
-      echo "Installed as a package: update it with your system (yay, or omarchy update)."
+      echo "Installed as a package: update it by running 'git pull' and 'makepkg -si' in your clone's"
+      echo "packaging/aur folder (or with yay, if you installed it from the AUR)."
     else
       git -C "$CODE" pull --ff-only && exec bash "$CODE/install.sh"
     fi
@@ -275,7 +276,7 @@ case "${1:-open}" in
   uninstall)
     if ((PACKAGED)); then
       unsetup
-      echo "Now remove the package:  yay -R omarchy-poolsuite"
+      echo "Now remove the package:  sudo pacman -R omarchy-poolsuite"
     else
       exec bash "$CODE/uninstall.sh" "${@:2}"
     fi
