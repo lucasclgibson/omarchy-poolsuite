@@ -21,6 +21,9 @@ BarWidget {
   property bool starting: false
   // Set when the engine stopped itself because tracks kept failing to load.
   property string errorText: ""
+  // Favourites: whether the playing song is one, and how many there are.
+  property bool fave: false
+  property int faves: 0
 
   // ---- look -------------------------------------------------------------------
   // "omarchy" follows the current Omarchy theme; "poolsuite" is the classic
@@ -55,7 +58,8 @@ BarWidget {
     { id: "tokyo",     name: "Tokyo Disco" },
     { id: "friday",    name: "Friday Nite Heat" },
     { id: "hangover",  name: "Hangover Club" },
-    { id: "mixtapes",  name: "Mixtapes" }
+    { id: "mixtapes",  name: "Mixtapes" },
+    { id: "favourites", name: "Favourites" }
   ]
   function channelName(id) {
     for (var i = 0; i < channels.length; i++) if (channels[i].id === id) return channels[i].name
@@ -74,6 +78,19 @@ BarWidget {
   }
 
   onPlayersChanged: refresh()
+  // A new song: re-check whether it's a favourite.
+  onTrackTitleChanged: refreshSoon.restart()
+
+  // Super+I (or the heart) changes the favourites file; follow it at once.
+  readonly property string favesPath: (Quickshell.env("XDG_DATA_HOME") || (Quickshell.env("HOME") + "/.local/share"))
+    + "/poolsuite/favourites.m3u"
+  FileView {
+    id: favesFile
+    path: root.favesPath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: { reload(); refreshSoon.restart() }
+  }
   Component.onCompleted: refresh()
 
   Process {
@@ -88,6 +105,8 @@ BarWidget {
           root.busName = String(s.bus || "")
           root.channel = String(s.channel || "official")
           root.errorText = root.running ? "" : String(s.error || "").trim()
+          root.fave = s.fave === true
+          root.faves = Number(s.faves) || 0
           if (root.player || !root.running) root.starting = false
         } catch (e) {}
       }

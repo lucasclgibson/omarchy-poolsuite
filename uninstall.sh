@@ -13,7 +13,8 @@ SRC="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-poolsuite"
 bash "$HERE/bin/poolsuite" unsetup
 
 rm -f "$HOME/.local/bin/poolsuite"
-rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite"   # older versions
+# Older versions kept the guard here; your Favourites stay.
+rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite/guard.lua"
 
 if [[ ${1:-} == "--fonts" ]]; then
   rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/fonts/poolsuite"
@@ -24,3 +25,4 @@ fi
 [[ $HERE == "$SRC" ]] && rm -rf "$SRC"
 
 echo "Poolsuite removed. The packages it installed (mpv, yt-dlp, …) were left in place."
+echo "Your Favourites are kept in ${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite/favourites.m3u."

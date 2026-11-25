@@ -9,6 +9,8 @@
 #   poolsuite toggle [--open]  play/pause, starting the radio if it's off
 #                              (--open also opens the bar player)
 #   poolsuite next | previous | pause
+#   poolsuite fave             add the current song to Favourites (or take it out)
+#   poolsuite play favourites  play your Favourites
 #   poolsuite media-key        what the play key does: pauses another app if one
 #                              is playing, otherwise plays/pauses (or starts) Poolsuite
 #   poolsuite quit             turn the radio off
@@ -51,7 +53,12 @@ SHELL_JSON="$HOME/.config/omarchy/shell.json"
 MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 MENU_ENTRY='  "poolsuite": {"icon":"󱁕","label":"Poolsuite","description":"Ultra-summer internet radio in the bar","action":"poolsuite","aliases":["radio","music"]},'
 
-mkdir -p "$STATE" "$CACHE"
+# Favourites: your own playlist, kept with your data (not the cache).
+FAVS="${XDG_DATA_HOME:-$HOME/.local/share}/poolsuite/favourites.m3u"
+
+mkdir -p "$STATE" "$CACHE" "$(dirname "$FAVS")"
+# Always there, so the bar player can watch it for changes.
+[[ -f $FAVS ]] || echo "#EXTM3U" >"$FAVS"
 
 declare -A URLS=(
   [official]="https://soundcloud.com/poolsuite/sets/poolsuite-fm-official-playlist"
@@ -84,6 +91,63 @@ mpris() {
 }
 
 channel() { cat "$STATE/channel" 2>/dev/null || echo official; }
+
+# Read a property from the running mpv.
+mpv_get() {
+  printf '{"command":["get_property","%s"]}\n' "$1" | socat - "UNIX-CONNECT:$SOCK" 2>/dev/null |
+    jq -r 'if .error == "success" and .data != null then .data else empty end' 2>/dev/null
+}
+
+# A little on-screen toast, the same one Omarchy shows when tracks change.
+toast() { # toast <icon> <message>
+  omarchy-shell shell summon omarchy.osd "$(jq -nc --arg i "$1" --arg m "$2" '{icon: $i, message: $m}')" >/dev/null 2>&1
+}
+
+fave_count() { local n; n=$(grep -c '^https\?://' "$FAVS" 2>/dev/null); echo "${n:-0}"; }
+is_fave() { [[ -n $1 && -f $FAVS ]] && grep -qxF "$1" "$FAVS"; }
+
+# Add the playing song to Favourites, or take it out if it's already there.
+fave() {
+  if ! pid_of >/dev/null; then
+    toast "󰋕" "Nothing playing"
+    return 1
+  fi
+  local url artist title name dur
+  url=$(mpv_get path)
+  if [[ $url != http* ]]; then
+    toast "󰋕" "Still loading, try again"
+    return 1
+  fi
+  # Same artist/title the bar player shows (mpv-mpris), which also knows the
+  # SoundCloud uploader when the file has no artist tag.
+  local bus meta
+  bus=$(bus_of "$(pid_of)")
+  meta=$(busctl --user --json=short get-property "$bus" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player Metadata 2>/dev/null)
+  artist=$(jq -r '.data["xesam:artist"].data[0] // empty' <<<"$meta" 2>/dev/null)
+  title=$(jq -r '.data["xesam:title"].data // empty' <<<"$meta" 2>/dev/null)
+  if [[ -n $artist && -n $title ]]; then name="$artist - $title"; else name=$(mpv_get media-title); fi
+  name=${name//$'\n'/ }
+  dur=$(mpv_get duration); dur=${dur%%.*}
+
+  mkdir -p "$(dirname "$FAVS")"
+  [[ -s $FAVS ]] || echo "#EXTM3U" >"$FAVS"
+  if is_fave "$url"; then
+    # Drop the URL line and the #EXTINF line in front of it.
+    local tmp
+    tmp=$(mktemp)
+    awk -v url="$url" '
+      /^#EXTINF/ { held = $0; next }
+      $0 == url { held = ""; next }
+      { if (held != "") print held; held = ""; print }
+      END { if (held != "") print held }' "$FAVS" >"$tmp" && cat "$tmp" >"$FAVS"
+    rm -f "$tmp"
+    toast "󰋕" "Removed from Favourites: $name"
+  else
+    printf '#EXTINF:%s,%s\n%s\n' "${dur:-0}" "$name" "$url" >>"$FAVS"
+    toast "󰋑" "Added to Favourites: $name"
+  fi
+  return 0
+}
 
 # Write $CACHE/<ch>.m3u with "#EXTINF:<secs>,Artist - Title" for every track.
 build_list() {
@@ -130,6 +194,7 @@ refresh_lists() {
   local ch list=("$@" "${ORDER[@]}")
   [[ $force == 1 && $# -gt 0 ]] && list=("$@")
   for ch in "${list[@]}"; do
+    [[ -n ${URLS[$ch]:-} ]] || continue
     if [[ $force == 1 || ! -s $CACHE/$ch.m3u || -n $(find "$CACHE/$ch.m3u" -mtime +7 2>/dev/null) ]]; then
       # Skip channels that failed in the last 6 hours unless forced.
       [[ $force != 1 && -n $(find "$CACHE/.$ch.failed" -mmin -360 2>/dev/null) ]] && continue
@@ -139,13 +204,23 @@ refresh_lists() {
 }
 
 source_for() {
-  # The cached list when there is one; otherwise the SoundCloud set itself.
-  if [[ -s $CACHE/$1.m3u ]]; then echo "$CACHE/$1.m3u"; else echo "${URLS[$1]}"; fi
+  # Favourites: your list. Others: the cached list when there is one,
+  # otherwise the SoundCloud set itself.
+  if [[ $1 == favourites ]]; then echo "$FAVS"
+  elif [[ -s $CACHE/$1.m3u ]]; then echo "$CACHE/$1.m3u"
+  else echo "${URLS[$1]}"; fi
 }
 
 play() {
   local ch="${1:-$(channel)}"
-  [[ -n ${URLS[$ch]:-} ]] || { echo "unknown channel: $ch (try: ${ORDER[*]})" >&2; exit 1; }
+  [[ -n ${URLS[$ch]:-} || $ch == favourites ]] || { echo "unknown channel: $ch (try: ${ORDER[*]} favourites)" >&2; exit 1; }
+  if [[ $ch == favourites && $(fave_count) -eq 0 ]]; then
+    # Leave whatever is playing alone; just say why nothing changed.
+    echo "No favourites yet: press Super+I or the heart while a song plays." >&2
+    toast "󰋕" "No favourites yet: press Super+I while a song plays"
+    pid_of >/dev/null || echo "No favourites yet" >"$STATE/error"
+    exit 1
+  fi
 
   # Same channel and already running: just make sure it's playing.
   if pid=$(pid_of) && [[ $ch == "$(channel)" ]]; then
@@ -271,7 +346,8 @@ case "${1:-open}" in
   next) mpris Next ;;
   previous | prev) mpris Previous ;;
   quit | stop | off) quit ;;
-  channels) printf '%s\n' "${ORDER[@]}" ;;
+  channels) printf '%s\n' "${ORDER[@]}" favourites ;;
+  fave | favourite | favorite) fave ;;
   theme)
     # Stored as `theme` on the widget's entry in the bar layout (shell.json).
     if [[ -z ${2:-} ]]; then
@@ -309,10 +385,13 @@ case "${1:-open}" in
   refresh-missing) shift; refresh_lists 0 "$@" ;;
   status)
     if pid=$(pid_of); then
-      printf '{"running":true,"pid":%s,"bus":"%s","channel":"%s"}\n' "$pid" "$(bus_of "$pid")" "$(channel)"
+      f=false
+      is_fave "$(mpv_get path)" && f=true
+      printf '{"running":true,"pid":%s,"bus":"%s","channel":"%s","fave":%s,"faves":%s}\n' \
+        "$pid" "$(bus_of "$pid")" "$(channel)" "$f" "$(fave_count)"
     else
-      printf '{"running":false,"pid":0,"bus":"","channel":"%s","error":%s}\n' "$(channel)" \
-        "$(jq -Rs . 2>/dev/null <"$STATE/error" || echo '""')"
+      printf '{"running":false,"pid":0,"bus":"","channel":"%s","fave":false,"faves":%s,"error":%s}\n' \
+        "$(channel)" "$(fave_count)" "$(jq -Rs . 2>/dev/null <"$STATE/error" || echo '""')"
     fi
     ;;
   *)

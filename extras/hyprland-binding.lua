@@ -14,3 +14,9 @@ o.bind("SUPER + F8", "Poolsuite play/pause + open player", "poolsuite toggle --o
 
 -- Super+Alt+P: open the bar player.
 o.bind("SUPER + ALT + P", "Poolsuite player", "poolsuite")
+
+-- Super+I: favourite the playing song (or take it out of Favourites), with a
+-- toast. Note: Omarchy uses Super+I to switch input language; this replaces
+-- that, so skip it if you type in more than one language (Super+Shift+I still
+-- switches back).
+o.rebind("SUPER + I", "Poolsuite: favourite this song", "poolsuite fave")

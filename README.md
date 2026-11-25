@@ -15,6 +15,7 @@ A tiny [Poolsuite FM](https://poolsuite.net/) player that lives in the [Omarchy]
 - **Lives in the bar.** A 1-bit palm tree that lights up in your accent colour while music plays.
 - **Two looks.** One follows your current Omarchy theme and font and changes when you switch themes. The other is the classic System 7 look: cream, aqua and pink, Chicago and DOS VGA pixel type, raised keys and dithering. Switch with the button in the player's title bar.
 - **Eight channels**, each shuffled: Poolsuite FM, Poolsuite FM Two, Balearic Sundown, Indie Summer, Tokyo Disco, Friday Nite Heat, Hangover Club and Mixtapes. There's also a 🎲 key that jumps to a random channel.
+- **Favourites.** Heart the song that's playing (in the player, or Super+I from anywhere, with a toast), then play them all from the **Favourites** channel.
 - **Proper track names everywhere.** These show in the player, the bar tooltip and Omarchy's media notifications, and they're right from the moment you skip.
 - **Normal media controls.** It's an MPRIS player, so media keys and `playerctl` work as usual.
 - **Light.** It only runs `mpv` while the radio is on. Stop (■) turns it off completely.
@@ -87,7 +88,7 @@ In the bar:
 | Right-click | Next track |
 | Scroll | Volume |
 
-In the player, the four transport keys are play/pause, stop (turns the radio off), previous and next. The 🎲 key picks a random channel. The **Channel** box opens a pop-up menu, and the bars next to the speaker set the volume.
+In the player, the heart on the now-playing card adds the song to Favourites (it turns red) or takes it out. The four transport keys are play/pause, stop (turns the radio off), previous and next. The 🎲 key picks a random channel. The **Channel** box opens a pop-up menu, and the bars next to the speaker set the volume.
 
 ### Keys
 
@@ -97,6 +98,7 @@ In the player, the four transport keys are play/pause, stop (turns the radio off
 | --- | --- |
 | Play key (F8 on a Mac) | Starts Poolsuite and plays when nothing else is playing; play/pause once it's on. If another app is playing, it pauses that app as usual. |
 | Super+F8 | Always Poolsuite: start it or play/pause, and open the player |
+| Super+I | Add the playing song to Favourites (or take it out), with a toast. This replaces Omarchy's switch-input-language shortcut; Super+Shift+I still switches. |
 | Super+Alt+P | Open the bar player |
 
 From a terminal:
@@ -107,6 +109,8 @@ poolsuite play [channel]   start the radio (last channel by default)
 poolsuite toggle [--open]  play/pause, starting the radio if it's off (--open also opens the player)
 poolsuite next | previous | pause
 poolsuite media-key        what the play key does (see Keys)
+poolsuite fave             add the playing song to Favourites (or take it out)
+poolsuite play favourites  play your Favourites
 poolsuite quit             turn the radio off
 poolsuite channels         list channels
 poolsuite theme [omarchy|poolsuite]
@@ -150,7 +154,7 @@ poolsuite uninstall           # keeps the fonts
 poolsuite uninstall --fonts   # removes them too
 ```
 
-This takes the widget off the bar and the entry out of the menu, and deletes the command, the plugin link, the cached track lists and the code in `~/.local/share/omarchy-poolsuite`. Any packages it installed are left in place. A `shell.json` backup is kept next to the original.
+This takes the widget off the bar and the entry out of the menu, and deletes the command, the plugin link, the cached track lists and the code in `~/.local/share/omarchy-poolsuite`. Any packages it installed are left in place. A `shell.json` backup is kept next to the original, and your Favourites stay in `~/.local/share/poolsuite/favourites.m3u`.
 
 ## Credits and licences
 

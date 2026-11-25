@@ -60,7 +60,7 @@ Rectangle {
   }
   readonly property string status: host.starting ? "Tuning…"
     : host.playing ? "Playing" : host.running ? "Paused"
-    : host.errorText ? "Offline" : "Stopped"
+    : host.errorText.indexOf("SoundCloud") >= 0 ? "Offline" : "Stopped"
 
   // ---- sprites --------------------------------------------------------------
   readonly property var sClose: ["#.....#", ".#...#.", "..#.#..", "...#...", "..#.#..", ".#...#.", "#.....#"]
@@ -89,6 +89,8 @@ Rectangle {
   readonly property var sTri: ["#..", "##.", "#.."]
   readonly property var sDown: ["#####", ".###.", "..#.."]
   readonly property var sCheck: ["......#", ".....##", "#...##.", "##.##..", ".###...", "..#...."]
+  readonly property var sHeart: [".##...##.", "####.####", "#########", "#########", ".#######.", "..#####..", "...###...", "....#...."]
+  readonly property var sHeartOff: [".##...##.", "#..#.#..#", "#...#...#", "#.......#", ".#.....#.", "..#...#..", "...#.#...", "....#...."]
   readonly property var sSpeaker: ["...##..", "..#.#..", "##..#..", "#...#.#", "#...#.#", "##..#..", "..#.#..", "...##.."]
 
   Column {
@@ -264,6 +266,23 @@ Rectangle {
         }
         Rectangle { width: parent.width; height: 1; color: ui.rule; antialiasing: false }
       }
+
+      // Favourite the playing song (same as Super+I).
+      PixelIcon {
+        id: heart
+        anchors.right: parent.right; anchors.rightMargin: 11
+        anchors.top: parent.top; anchors.topMargin: 11
+        px: 1
+        rows: ui.host.fave ? ui.sHeart : ui.sHeartOff
+        color: ui.host.fave ? ui.onAir : (heartMouse.containsMouse ? ui.ink : ui.grey)
+        visible: ui.host.running
+        MouseArea {
+          id: heartMouse
+          anchors.fill: parent; anchors.margins: -6
+          hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+          onClicked: { ui.host.fave = !ui.host.fave; ui.host.cmd(["fave"]) }
+        }
+      }
     }
 
     // ---- status + transport -------------------------------------------------
@@ -329,7 +348,7 @@ Rectangle {
           id: pinkMouse
           anchors.fill: parent; cursorShape: Qt.PointingHandCursor
           onClicked: {
-            var list = ui.host.channels.filter(function(c) { return c.id !== ui.host.channel })
+            var list = ui.host.channels.filter(function(c) { return c.id !== ui.host.channel && c.id !== "favourites" })
             var pick = list[Math.floor(Math.random() * list.length)]
             ui.host.channel = pick.id
             ui.host.cmd(["play", pick.id])
